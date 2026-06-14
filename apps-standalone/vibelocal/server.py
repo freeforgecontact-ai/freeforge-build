@@ -3,7 +3,7 @@
 100% local : tourne sur TON ordinateur (Windows / macOS / Linux), aucune donnee
 envoyee ailleurs. Ouvre http://127.0.0.1:8777 dans ton navigateur.
 
-Dependances : yt-dlp  (pip install yt-dlp)
+Dependances : yt-dlp  (installe automatiquement au besoin)
 """
 import http.server
 import json
@@ -15,11 +15,37 @@ import sys
 import urllib.parse
 import webbrowser
 
-try:
-    from yt_dlp import YoutubeDL
-except Exception:
-    print("\n[VibeLocal] yt-dlp manquant. Installe-le :  pip install yt-dlp\n")
-    raise
+
+def _load_ytdlp():
+    """Importe yt-dlp ; tente une installation automatique si absent."""
+    try:
+        from yt_dlp import YoutubeDL
+        return YoutubeDL
+    except Exception:
+        pass
+    import subprocess
+    print("[VibeLocal] yt-dlp introuvable — installation automatique en cours...")
+    for args in (
+        [sys.executable, "-m", "pip", "install", "-q", "--upgrade", "yt-dlp"],
+        [sys.executable, "-m", "pip", "install", "-q", "--user", "--upgrade", "yt-dlp"],
+    ):
+        try:
+            subprocess.run(args, check=False, timeout=180)
+            from yt_dlp import YoutubeDL
+            print("[VibeLocal] yt-dlp installe avec succes.")
+            return YoutubeDL
+        except Exception:
+            continue
+    print("\n[VibeLocal] Impossible d'installer yt-dlp automatiquement.")
+    print("            Installe-le a la main :  pip install yt-dlp\n")
+    try:
+        input("Appuie sur Entree pour fermer cette fenetre...")
+    except Exception:
+        pass
+    sys.exit(1)
+
+
+YoutubeDL = _load_ytdlp()
 
 if getattr(sys, "frozen", False):
     BASE = os.path.dirname(sys.executable)
@@ -233,6 +259,20 @@ class H(http.server.BaseHTTPRequestHandler):
 
 class Threaded(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
+    # False = le bind echoue si le port est deja pris (detection fiable sous Windows)
+    allow_reuse_address = False
+
+
+def bind_server():
+    """Trouve un port libre a partir de PORT et y demarre le serveur."""
+    last = None
+    for p in range(PORT, PORT + 50):
+        try:
+            return Threaded(("0.0.0.0", p), H), p
+        except OSError as e:
+            last = e
+            continue
+    raise SystemExit(f"[VibeLocal] Aucun port libre entre {PORT} et {PORT + 49} ({last}).")
 
 
 def lan_ip():
@@ -247,12 +287,22 @@ def lan_ip():
 
 
 def main():
-    srv = Threaded(("0.0.0.0", PORT), H)
-    url = f"http://127.0.0.1:{PORT}"
+    try:
+        srv, port = bind_server()
+    except SystemExit as e:
+        print(e)
+        try:
+            input("Appuie sur Entree pour fermer cette fenetre...")
+        except Exception:
+            pass
+        return
+    url = f"http://127.0.0.1:{port}"
     print("=" * 52)
     print("  VibeLocal PC est lance !")
     print(f"  Sur cet ordinateur : {url}")
-    print(f"  Sur ton telephone (meme Wi-Fi) : http://{lan_ip()}:{PORT}")
+    print(f"  Sur ton telephone (meme Wi-Fi) : http://{lan_ip()}:{port}")
+    if port != PORT:
+        print(f"  (Le port {PORT} etait occupe — bascule sur {port}.)")
     print("  (Laisse cette fenetre ouverte. Ferme-la pour arreter.)")
     print("=" * 52)
     if not os.environ.get("VIBELOCAL_NOBROWSER"):
@@ -263,7 +313,12 @@ def main():
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
-        pass
+        print("\n[VibeLocal] Arret demande. A bientot !")
+    finally:
+        try:
+            srv.server_close()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":
