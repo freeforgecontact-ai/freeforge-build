@@ -65,3 +65,18 @@ jobs:
             build-${{ matrix.app }}/dist/*.exe
             build-${{ matrix.app }}/dist/*.dmg
             build-${{ matrix.app }}/dist/*.AppImage
+      - name: Rename desktop installer
+        shell: bash
+        run: |
+          cd build-${{ matrix.app }}/dist
+          case "${{ matrix.os }}" in
+            windows-latest) f=$(ls *.exe 2>/dev/null | head -1); out=freeforge-${{ matrix.app }}-windows.exe;;
+            macos-latest)   f=$(ls *.dmg 2>/dev/null | head -1); out=freeforge-${{ matrix.app }}-mac.dmg;;
+            ubuntu-latest)  f=$(ls *.AppImage 2>/dev/null | head -1); out=freeforge-${{ matrix.app }}-linux.AppImage;;
+          esac
+          cp "$f" "$GITHUB_WORKSPACE/$out"
+      - name: Publish desktop to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: app-${{ matrix.app }}
+          files: freeforge-${{ matrix.app }}-*
