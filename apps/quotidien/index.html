@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="fr-CA">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FreeForge Quotidien</title>
+  <meta name="description" content="Outils du quotidien 100% local et hors-ligne.">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <meta name="theme-color" content="#0a3559">
+  <link rel="stylesheet" href="./ff-core.css">
+</head>
+<body>
+  <script src="./ff-core.js"></script>
+  <script src="./tools/cv.js"></script>
+  <script src="./tools/journal.js"></script>
+  <script src="./tools/habit.js"></script>
+  <script src="./tools/kanban.js"></script>
+  <script src="./tools/frigo.js"></script>
+  <script src="./tools/cuisine-convert.js"></script>
+  <script src="./tools/kids-story.js"></script>
+  <script src="./tools/multi-timer.js"></script>
+  <script src="./tools/emergency-card.js"></script>
+  <script src="./tools/recipe-scaler.js"></script>
+  <script src="./tools/pantry.js"></script>
+  <script>
+    FF.boot({
+      name: "FreeForge Quotidien",
+      logo: "QT",
+      tagline: "CV, journal chiffré, habitudes, cuisine et organisation. 100 % sur ton appareil.",
+      icon: "🏠"
+    });
+  </script>
+</body>
+</html>

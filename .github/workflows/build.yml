@@ -1,0 +1,116 @@
+name: build-freeforge
+on:
+  push: { branches: [main] }
+  workflow_dispatch: {}
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [affaires, dev, finances, etudes, sante, studio, gamers, quotidien, voyage]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - uses: actions/setup-java@v4
+        with: { distribution: 'temurin', java-version: '17' }
+      - uses: android-actions/setup-android@v3
+      - run: node tooling/scaffold.mjs ${{ matrix.app }} android build-${{ matrix.app }}
+      - run: |
+          cd build-${{ matrix.app }}
+          npm install
+          npx cap add android
+          npx cap sync android
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: freeforge-${{ matrix.app }}-android
+          path: build-${{ matrix.app }}/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: warn
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+        app: [affaires, dev, finances, etudes, sante, studio, gamers, quotidien, voyage]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - run: node tooling/scaffold.mjs ${{ matrix.app }} electron build-${{ matrix.app }}
+      - name: Build desktop installer
+        shell: bash
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: |
+          cd build-${{ matrix.app }}
+          npm install
+          npm run dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: freeforge-${{ matrix.app }}-${{ matrix.os }}
+          path: |
+            build-${{ matrix.app }}/dist/*.exe
+            build-${{ matrix.app }}/dist/*.dmg
+            build-${{ matrix.app }}/dist/*.AppImage
+          if-no-files-found: ignore
+  release:
+    needs: [android, desktop]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts }
+      - name: Rassembler et renommer les binaires
+        run: |
+          mkdir -p out
+          for d in artifacts/freeforge-*-android; do a=$(basename "$d" | sed -E 's/freeforge-(.*)-android/\1/'); [ -f "$d/app-debug.apk" ] && cp "$d/app-debug.apk" "out/FreeForge-$a-Android.apk" || true; done
+          for d in artifacts/freeforge-*-windows-latest; do a=$(basename "$d" | sed -E 's/freeforge-(.*)-windows-latest/\1/'); f=$(ls "$d"/*.exe 2>/dev/null | head -1); [ -n "$f" ] && cp "$f" "out/FreeForge-$a-Windows.exe" || true; done
+          for d in artifacts/freeforge-*-macos-latest; do a=$(basename "$d" | sed -E 's/freeforge-(.*)-macos-latest/\1/'); f=$(ls "$d"/*.dmg 2>/dev/null | head -1); [ -n "$f" ] && cp "$f" "out/FreeForge-$a-Mac.dmg" || true; done
+          for d in artifacts/freeforge-*-ubuntu-latest; do a=$(basename "$d" | sed -E 's/freeforge-(.*)-ubuntu-latest/\1/'); f=$(ls "$d"/*.AppImage 2>/dev/null | head -1); [ -n "$f" ] && cp "$f" "out/FreeForge-$a-Linux.AppImage" || true; done
+          ls -la out
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: FreeForge - derniers installeurs
+          files: out/*
+          body: "Installeurs natifs des 9 apps FreeForge (Android / Windows / macOS / Linux). 100% local, hors-ligne, open source (MIT)."
+  report:
+    needs: [android, desktop]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Collect status + failed logs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p ci
+          {
+            echo "android_matrix=${{ needs.android.result }}"
+            echo "desktop_matrix=${{ needs.desktop.result }}"
+            echo "run_id=${{ github.run_id }} @ $(date -u)"
+            echo "--- jobs ---"
+            gh api repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs --paginate -q '.jobs[] | "\(.name): \(.conclusion)"' 2>&1 || echo "(jobs api 403)"
+          } > ci/STATUS.txt
+          gh run view ${{ github.run_id }} --log-failed > ci/FAIL.log 2>&1 || echo "(log-failed indisponible)" > ci/FAIL.log
+          head -c 95000 ci/FAIL.log > ci/FAIL.head.log
+      - name: Push status to ci-status branch
+        run: |
+          git config user.name ci-bot
+          git config user.email ci@pgrg.local
+          git checkout -B ci-status
+          git add -f ci/STATUS.txt ci/FAIL.head.log
+          git commit -m "CI status run ${{ github.run_id }}" || echo "no change"
+          git push -f origin ci-status

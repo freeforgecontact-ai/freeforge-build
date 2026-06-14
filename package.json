@@ -1,0 +1,3 @@
+{ "name": "freeforge-apps", "version": "1.0.0", "private": true,
+  "description": "Suite FreeForge — 9 apps offline empaquetées en natif",
+  "scripts": { "scaffold": "node tooling/scaffold.mjs" } }

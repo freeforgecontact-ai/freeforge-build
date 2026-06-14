@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="fr-CA">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FreeForge Voyage</title>
+  <meta name="description" content="Checklists, devises, itinéraires, fuseaux et dépenses de voyage. 100% sur ton appareil.">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <meta name="theme-color" content="#0a3559">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./ff-core.css">
+</head>
+<body>
+  <script src="./ff-core.js"></script>
+  <script src="./tools/checklist-voyage.js"></script>
+  <script src="./tools/currency.js"></script>
+  <script src="./tools/itineraire.js"></script>
+  <script src="./tools/packing.js"></script>
+  <script src="./tools/world-time.js"></script>
+  <script src="./tools/expense-splitter.js"></script>
+  <script src="./tools/carburant.js"></script>
+  <script src="./tools/photo-compress.js"></script>
+  <script>
+    FF.boot({
+      name: "FreeForge Voyage",
+      logo: "VY",
+      tagline: "Checklists, devises, itinéraires, fuseaux et dépenses de voyage. 100 % sur ton appareil."
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+node_modules/
+build-*/
+dist/
+*.new
+_shots/
+ffx/
+ffsrc/
+.DS_Store
