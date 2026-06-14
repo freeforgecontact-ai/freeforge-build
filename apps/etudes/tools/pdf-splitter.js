@@ -11,16 +11,20 @@ FF.register({
     }
     async function merge(files) {
       if (!window.PDFLib) return toast("Librairie PDF non chargée", "err");
-      const { PDFDocument } = window.PDFLib; const outDoc = await PDFDocument.create();
-      for (const f of files) { const src = await PDFDocument.load(await f.arrayBuffer()); const pages = await outDoc.copyPages(src, src.getPageIndices()); pages.forEach((p) => outDoc.addPage(p)); }
-      const bytes = await outDoc.save(); save("fusion.pdf", new Blob([bytes], { type: "application/pdf" })); toast("PDF fusionné", "ok");
+      try {
+        const { PDFDocument } = window.PDFLib; const outDoc = await PDFDocument.create();
+        for (const f of files) { const src = await PDFDocument.load(await f.arrayBuffer()); const pages = await outDoc.copyPages(src, src.getPageIndices()); pages.forEach((p) => outDoc.addPage(p)); }
+        const bytes = await outDoc.save(); save("fusion.pdf", new Blob([bytes], { type: "application/pdf" })); toast("PDF fusionné", "ok");
+      } catch (e) { toast("PDF illisible ou protégé", "err"); }
     }
     async function split(file, spec) {
       if (!window.PDFLib) return toast("Librairie PDF non chargée", "err");
-      const { PDFDocument } = window.PDFLib; const src = await PDFDocument.load(await file.arrayBuffer());
-      const idx = rangeToIdx(spec, src.getPageCount()); if (!idx.length) return toast("Plage invalide", "err");
-      const outDoc = await PDFDocument.create(); const pages = await outDoc.copyPages(src, idx); pages.forEach((p) => outDoc.addPage(p));
-      const bytes = await outDoc.save(); save("extrait.pdf", new Blob([bytes], { type: "application/pdf" })); toast(idx.length + " page(s) extraite(s)", "ok");
+      try {
+        const { PDFDocument } = window.PDFLib; const src = await PDFDocument.load(await file.arrayBuffer());
+        const idx = rangeToIdx(spec, src.getPageCount()); if (!idx.length) return toast("Plage invalide", "err");
+        const outDoc = await PDFDocument.create(); const pages = await outDoc.copyPages(src, idx); pages.forEach((p) => outDoc.addPage(p));
+        const bytes = await outDoc.save(); save("extrait.pdf", new Blob([bytes], { type: "application/pdf" })); toast(idx.length + " page(s) extraite(s)", "ok");
+      } catch (e) { toast("PDF illisible ou protégé", "err"); }
     }
     const mFiles = el("input", { class: "ff-input", type: "file", accept: "application/pdf", multiple: true });
     const sFile = el("input", { class: "ff-input", type: "file", accept: "application/pdf" });

@@ -122,6 +122,7 @@ button{font-family:inherit}
 .ff-table th{font-family:var(--pg-head);font-size:.85rem;color:var(--pg-navy)}
 .ff-table tr:last-child td{border-bottom:none}
 .ff-table .num{text-align:right;font-variant-numeric:tabular-nums}
+.ff-tablewrap{overflow-x:auto;-webkit-overflow-scrolling:touch;max-width:100%}
 
 /* Divers */
 .ff-chip{display:inline-block;font-size:.78rem;font-weight:900;padding:.2rem .7rem;border-radius:999px;

@@ -56,23 +56,70 @@
   };
   const round2 = (n) => Math.round((n + Number.EPSILON) * 100) / 100;
 
-  /* ---------- Save / Share (native-aware) ---------- */
+  /* ---------- Save / Share (multi-plateforme, mobile-first) ---------- */
   function blobOf(content, mime) {
     if (content instanceof Blob) return content;
     return new Blob([content], { type: mime || "application/octet-stream" });
   }
+  function _blobToB64(blob) {
+    return new Promise(function (resolve, reject) {
+      const r = new FileReader();
+      r.onload = function () { resolve(String(r.result).split(",")[1] || ""); };
+      r.onerror = reject;
+      r.readAsDataURL(blob);
+    });
+  }
+  // Sauvegarde native Capacitor (APK Android/iOS) : ecrit le fichier puis ouvre le partage natif.
+  FF._nativeSave = async function (filename, blob) {
+    const Cap = w.Capacitor;
+    if (!Cap) throw new Error("non-natif");
+    const P = Cap.Plugins || {};
+    const Filesystem = P.Filesystem || (Cap.registerPlugin && Cap.registerPlugin("Filesystem"));
+    if (!Filesystem || !Filesystem.writeFile) throw new Error("filesystem-indisponible");
+    const data = await _blobToB64(blob);
+    const res = await Filesystem.writeFile({ path: filename, data: data, directory: "CACHE", recursive: true });
+    const uri = res && res.uri;
+    const Share = P.Share || (Cap.registerPlugin && Cap.registerPlugin("Share"));
+    if (uri && Share && Share.share) {
+      try { await Share.share({ title: filename, text: filename, url: uri, files: [uri] }); }
+      catch (e) { /* partage annule : le fichier reste ecrit sur l'appareil */ }
+    }
+    FF.toast("Enregistre : " + filename);
+    return true;
+  };
   async function save(filename, content, mime) {
     const blob = blobOf(content, mime);
-    // Capacitor (APK / desktop) — écrit sur l'appareil + propose un partage
-    if (w.Capacitor && w.Capacitor.isNativePlatform && w.Capacitor.isNativePlatform()) {
-      try { return await FF._nativeSave(filename, blob); } catch (e) { /* fallback web */ }
+    const type = blob.type || mime || "application/octet-stream";
+    const native = !!(w.Capacitor && w.Capacitor.isNativePlatform && w.Capacitor.isNativePlatform());
+    // 1) Application installee (Capacitor) : sauvegarde + partage natifs (le plus fiable sur mobile).
+    if (native) { try { return await FF._nativeSave(filename, blob); } catch (e) { /* repli web ci-dessous */ } }
+    // 2) Partage de fichier natif (mobile / PWA / WebView). Evite sur ordinateur pour garder le vrai telechargement.
+    let mobileLike = native;
+    try { mobileLike = mobileLike || ((navigator.maxTouchPoints > 0 && w.matchMedia && w.matchMedia("(pointer:coarse)").matches) || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "")); } catch (e) {}
+    if (mobileLike && navigator.share && navigator.canShare) {
+      try {
+        const file = new File([blob], filename, { type: type });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: filename });
+          FF.toast("Partage : " + filename);
+          return true;
+        }
+      } catch (e) { if (e && e.name === "AbortError") return false; /* sinon : telechargement classique */ }
     }
-    const url = URL.createObjectURL(blob);
-    const a = el("a", { href: url, download: filename });
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 4000);
-    FF.toast("Enregistré : " + filename);
-    return true;
+    // 3) Telechargement classique (ordinateur, navigateurs).
+    try {
+      const url = URL.createObjectURL(blob);
+      const a = el("a", { href: url, download: filename, rel: "noopener" });
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { try { URL.revokeObjectURL(url); } catch (_) {} }, 8000);
+      FF.toast("Enregistre : " + filename);
+      return true;
+    } catch (e) {
+      // 4) Dernier recours : ouvrir le contenu pour enregistrement manuel.
+      try { const url = URL.createObjectURL(blob); w.open(url, "_blank"); FF.toast("Ouvre puis enregistre le fichier"); return true; } catch (_) {}
+      FF.toast("Telechargement impossible sur cet appareil", "err");
+      return false;
+    }
   }
   async function shareText(title, text) {
     if (navigator.share) { try { await navigator.share({ title, text }); return true; } catch (_) {} }
@@ -171,6 +218,16 @@
     wrap.append(launcher, surface);
     document.body.append(sky, bar, wrap);
     paintNet();
+    // Tables responsives : enveloppe chaque .ff-table dans un conteneur scrollable (mobile).
+    function wrapTables() {
+      surface.querySelectorAll("table.ff-table").forEach(function (tb) {
+        const p = tb.parentNode;
+        if (!p || (p.classList && p.classList.contains("ff-tablewrap"))) return;
+        const box = document.createElement("div"); box.className = "ff-tablewrap";
+        p.insertBefore(box, tb); box.appendChild(tb);
+      });
+    }
+    try { new MutationObserver(wrapTables).observe(surface, { childList: true, subtree: true }); } catch (e) {}
 
     const ctx = { el, $, $$, clear, store, fmt, round2, save, shareText, copy, cachedFetch, toast, print: printNode, app: FF.app };
     FF.ctx = ctx;
@@ -185,6 +242,7 @@
       const host = el("div", {});
       surface.append(head, host);
       try { tool.mount(host, ctx); } catch (e) { host.append(el("div", { class: "ff-note" }, "Erreur outil : " + e.message)); console.error(e); }
+      wrapTables();
       window.scrollTo(0, 0);
     }
     w.addEventListener("hashchange", route);
